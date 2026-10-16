@@ -1,0 +1,8 @@
+role,model,teacher,seed,path,sha,val_mAP_fold0,best_epoch,test_mAP_FP32,test_mAP_INT8_minmax,test_mAP_INT8_pct99.9,seconds,status,error,timestamp
+base,repvgg_a0_timm,,42,weights/qj/fp32/base/repvgg_a0_timm/none/seed42/model.pth,a40e6c4e6865a1ef,0.673601,70,0.6907,0.1301,0.5761,135,SUCCESS,,2026-10-09T22:52:29
+kd,repvgg_a0_timm,efficientnet_b5_timm,42,weights/qj/fp32/kd/repvgg_a0_timm/efficientnet_b5_timm/seed42/model.pth,540f9cd60c551542,0.745022,77,0.7538,0.2308,0.6774,137,SUCCESS,,2026-10-09T23:41:26
+kd,repvgg_a0_timm,seresnext101_32x4d_timm,42,weights/qj/fp32/kd/repvgg_a0_timm/seresnext101_32x4d_timm/seed42/model.pth,eef9e67ab997c90e,0.710953,77,0.7364,0.194,0.6586,134,SUCCESS,,2026-10-09T23:43:43
+kd,repvgg_a0_timm,convnext_base_timm,42,weights/qj/fp32/kd/repvgg_a0_timm/convnext_base_timm/seed42/model.pth,4bffb05f85fa38ad,0.743694,80,0.7538,0.2579,0.6799,135,SUCCESS,,2026-10-09T23:45:57
+kd,repvgg_a0_timm,convnext_small_timm,42,weights/qj/fp32/kd/repvgg_a0_timm/convnext_small_timm/seed42/model.pth,ff177df5fc42a5b4,0.747512,78,0.759,0.2671,0.6741,136,SUCCESS,,2026-10-09T23:48:13
+kd,repvgg_a0_timm,resnet101_tv,42,weights/qj/fp32/kd/repvgg_a0_timm/resnet101_tv/seed42/model.pth,5b28af51680958b6,0.716768,78,0.7477,0.0209,0.6624,135,SUCCESS,,2026-10-09T23:50:28
+kd,repvgg_a0_timm,densenet161_tv,42,weights/qj/fp32/kd/repvgg_a0_timm/densenet161_tv/seed42/model.pth,42901a98d3f19c2f,0.725115,70,0.7539,0.1608,0.6725,135,SUCCESS,,2026-10-09T23:52:44

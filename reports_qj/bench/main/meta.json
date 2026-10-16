@@ -1,0 +1,27 @@
+{
+  "tag": "main",
+  "sessions": [
+    {
+      "started": "2026-10-09T22:39:34",
+      "host": "gpu-server",
+      "repo_commit": "25220b8",
+      "onnxruntime": "1.26.0",
+      "torch": "2.5.1+cu121"
+    },
+    {
+      "started": "2026-10-11T07:34:23",
+      "host": "gpu-server",
+      "repo_commit": "2d8e72c",
+      "onnxruntime": "1.26.0",
+      "torch": "2.5.1+cu121"
+    }
+  ],
+  "test_fold": 4,
+  "calibration": {
+    "rule": "minmax",
+    "N": 256,
+    "seed": 123,
+    "pool": "every image except fold-4 consumer queries",
+    "secondary": "percentile 99.9"
+  }
+}

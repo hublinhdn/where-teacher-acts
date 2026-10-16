@@ -1,0 +1,55 @@
+{
+  "manufacturer": "samsung",
+  "model": "SM-A176B",
+  "soc_manufacturer": "Samsung",
+  "soc_model": "s5e8535",
+  "hardware": "s5e8535",
+  "board": "s5e8535",
+  "android": "16",
+  "sdk": "36",
+  "abi": "arm64-v8a",
+  "fingerprint": "samsung/a17xxx/a17x:16/BP4A.251205.006/A176BXXS8CZI7_OLM8CZI7:user/release-keys",
+  "cpu_max_khz": {
+    "0": 2002000,
+    "1": 2002000,
+    "2": 2002000,
+    "3": 2002000,
+    "4": 2002000,
+    "5": 2002000,
+    "6": 2400000,
+    "7": 2400000
+  },
+  "cpu_part": {
+    "0": "Cortex-A55",
+    "1": "Cortex-A55",
+    "2": "Cortex-A55",
+    "3": "Cortex-A55",
+    "4": "Cortex-A55",
+    "5": "Cortex-A55",
+    "6": "Cortex-A78",
+    "7": "Cortex-A78"
+  },
+  "page_size": "4096",
+  "cores": [
+    4,
+    5,
+    6,
+    7
+  ],
+  "taskset_mask": "f0",
+  "onnxruntime": "1.26.0 (Android package, CPU execution provider)",
+  "protocol": {
+    "rounds": 5,
+    "warmup": 30,
+    "iters": 200,
+    "threads": [
+      1,
+      4
+    ],
+    "size": 224,
+    "cooldown_s": 90,
+    "max_temp_C": 40.0
+  },
+  "peak_rss_MB_no_graph": 47.7,
+  "minutes": 82.1
+}

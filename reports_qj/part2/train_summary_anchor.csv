@@ -1,0 +1,8 @@
+arm,student,teacher,ft_epochs,seed,status,val_mAP_sim,best_epoch,minutes,error
+qanc_b,efficientnet_b1_timm,convnext_small_timm,40,42,done,0.697765,39,27.7,
+qanc_b,resnet18_tv,convnext_small_timm,40,42,done,0.766863,38,10.1,
+qanc_b,squeezenet1_0_tv,convnext_small_timm,40,42,done,0.670919,40,10.4,
+qanc_b,mobilenet_v3_large_tv,convnext_small_timm,40,42,done,0.666378,40,13.8,
+qanc_b,ghostnet_100_timm,convnext_small_timm,40,42,done,0.473808,36,17.5,
+qanc_b,repvgg_a0_timm,convnext_small_timm,40,42,done,0.740019,30,7.3,
+qanc_b,efficientnet_b0_timm,convnext_small_timm,40,42,done,0.638149,38,20.1,

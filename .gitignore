@@ -1,0 +1,29 @@
+# python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
+# data and weights are not distributed (see README)
+/data/
+/weights/
+
+# outputs of the generators and large measurement artifacts
+/paper/
+/logs/
+reports_qj/bench/*/latency_graphs/*.onnx
+reports_qj/mech/*/emb/
+reports_qj/mech/*/sqnr/
+*.onnx
+*.npy
+*.pth
+
+# android build products and the ONNX Runtime package
+android/build/
+android/vendor/
+
+# run locks
+.ptq.lock
+*.lock

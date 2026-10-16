@@ -1,0 +1,14 @@
+model,role,graph,params_backbone_M,params_deployed_M,params_training_M,checkpoint
+resnet18_tv,student,plain,11.177,11.44,21.479,weights/qj/fp32/base/resnet18_tv/none/seed42/model.pth
+squeezenet1_0_tv,student,plain,0.735,0.999,11.038,weights/qj/fp32/base/squeezenet1_0_tv/none/seed42/model.pth
+mobilenet_v3_large_tv,student,plain,2.972,3.464,13.504,weights/qj/fp32/base/mobilenet_v3_large_tv/none/seed42/model.pth
+ghostnet_100_timm,student,plain,3.902,5.74,15.779,weights/qj/fp32/base/ghostnet_100_timm/none/seed42/model.pth
+repvgg_a0_timm,student,fused,7.028,8.866,19.705,weights/qj/fp32/base/repvgg_a0_timm/none/seed42/model.pth
+efficientnet_b0_timm,student,plain,4.008,5.846,15.885,weights/qj/fp32/base/efficientnet_b0_timm/none/seed42/model.pth
+efficientnet_b1_timm,student,plain,6.513,8.351,18.391,weights/qj/fp32/base/efficientnet_b1_timm/none/seed42/model.pth
+efficientnet_b5_timm,teacher,plain,28.341,30.965,41.005,weights/qj/fp32/teacher/efficientnet_b5_timm/none/seed42/model.pth
+seresnext101_32x4d_timm,teacher,plain,46.906,49.531,59.57,weights/qj/fp32/teacher/seresnext101_32x4d_timm/none/seed42/model.pth
+convnext_base_timm,teacher,plain,87.566,89.142,99.182,weights/qj/fp32/teacher/convnext_base_timm/none/seed42/model.pth
+convnext_small_timm,teacher,plain,49.455,49.849,59.888,weights/qj/fp32/teacher/convnext_small_timm/none/seed42/model.pth
+resnet101_tv,teacher,plain,42.5,45.125,55.164,weights/qj/fp32/teacher/resnet101_tv/none/seed42/model.pth
+densenet161_tv,teacher,plain,26.472,29.26,39.3,weights/qj/fp32/teacher/densenet161_tv/none/seed42/model.pth

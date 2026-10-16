@@ -1,0 +1,21 @@
+{
+  "student": "efficientnet_b1_timm",
+  "teacher": "convnext_small_timm",
+  "A_fp32_val": 0.7261,
+  "B_fp32_val": 0.7834,
+  "threshold_qat_a": 0.4284,
+  "threshold_qakd_b": 0.5249,
+  "by_N": {
+    "20": {
+      "qat_a_int8": 0.1712,
+      "qakd_b_int8": 0.162,
+      "pass": false
+    },
+    "40": {
+      "qat_a_int8": 0.546,
+      "qakd_b_int8": 0.6048,
+      "pass": true
+    }
+  },
+  "chosen_N": 40
+}

@@ -1,0 +1,5 @@
+arm,student,teacher,ft_epochs,status,val_mAP_sim,best_epoch
+qat_a,efficientnet_b1_timm,,20,done,0.561004,20
+qakd_b,efficientnet_b1_timm,convnext_small_timm,20,done,0.588882,16
+qat_a,efficientnet_b1_timm,,40,done,0.642461,39
+qakd_b,efficientnet_b1_timm,convnext_small_timm,40,done,0.717723,39

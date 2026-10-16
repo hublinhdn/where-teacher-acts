@@ -1,0 +1,8 @@
+student,q_ptqa,q_ptqa_conv,q_ptqa_other,q_ptqa_producers,q_qakdb,learned_ranges,clip_kept_int8,clip_between_dq_q
+resnet18_tv,35,21,14,Conv:20 Add:8 input:1 MaxPool:1 Clip:1 Pow:1 GlobalAveragePool:1 Reshape:1 Gemm:1,47,43,15,12
+squeezenet1_0_tv,42,26,16,Conv:25 Concat:8 MaxPool:3 input:1 Clip:1 Pow:1 GlobalAveragePool:1 Reshape:1 Gemm:1,59,53,20,17
+mobilenet_v3_large_tv,142,63,79,Conv:62 HardSigmoid:28 Mul:28 Add:10 GlobalAveragePool:9 input:1 Clip:1 Pow:1 Reshape:1 Gemm:1,153,127,14,11
+ghostnet_100_timm,207,97,110,Conv:95 Concat:32 Slice:32 Add:17 Mul:9 ReduceMean:7 HardSigmoid:7 Gemm:2 input:1 Clip:1 Pow:1 GlobalAveragePool:1 Reshape:1 Erf:1,261,195,64,54
+repvgg_a0_timm,33,24,9,Conv:22 Gemm:2 Mul:2 input:1 Clip:1 Pow:1 GlobalAveragePool:1 Reshape:1 Erf:1 Add:1,34,49,4,1
+efficientnet_b0_timm,247,83,164,Conv:81 Mul:67 Sigmoid:65 ReduceMean:16 Add:10 Gemm:2 input:1 Clip:1 Pow:1 GlobalAveragePool:1 Reshape:1 Erf:1,257,167,29,10
+efficientnet_b1_timm,349,117,232,Conv:115 Mul:94 Sigmoid:92 ReduceMean:23 Add:17 Gemm:2 input:1 Clip:1 Pow:1 GlobalAveragePool:1 Reshape:1 Erf:1,366,235,43,17

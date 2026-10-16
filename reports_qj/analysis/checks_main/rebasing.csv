@@ -1,0 +1,8 @@
+student,n_images,cos_A_T,cos_B_T,cos_A_B,kd_loss_from_A,kd_loss_from_B
+resnet18_tv,2730,-0.0033,0.7133,0.153,10.033,2.867
+squeezenet1_0_tv,2730,-0.0015,0.6465,0.2285,10.015,3.535
+mobilenet_v3_large_tv,2730,-0.0031,0.6584,0.2014,10.031,3.416
+ghostnet_100_timm,2730,-0.0005,0.5335,0.3038,10.005,4.665
+repvgg_a0_timm,2730,0.0039,0.7357,0.1023,9.961,2.643
+efficientnet_b0_timm,2730,0.0042,0.6819,0.1501,9.958,3.181
+efficientnet_b1_timm,2730,0.0001,0.7201,0.1201,9.999,2.799
