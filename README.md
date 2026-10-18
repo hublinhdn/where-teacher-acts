@@ -1,4 +1,4 @@
-# Where should the teacher act? Knowledge distillation before and during 8-bit quantization
+# Distill first, then quantize: knowledge distillation before and during 8-bit quantization
 
 Code and measurements for a factorial study of knowledge distillation and 8-bit (INT8) quantization in compact
 pill retrieval models on ePillID. Seven convolutional students are distilled from six teachers (42 pairs). Each

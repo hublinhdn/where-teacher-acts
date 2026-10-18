@@ -31,12 +31,12 @@ def main():
     R = P.results()
     W, H = 13 / 2.54, 5 / 2.54
     fig = plt.figure(figsize=(W, H))
-    # left: the question and the design
+    # left: the message and the design
     ax = fig.add_axes([0.0, 0.0, 0.36, 1.0])
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.axis("off")
-    ax.text(0.04, 0.93, "Where should the teacher act?", fontsize=9, weight="bold", color=INK, va="top")
+    ax.text(0.04, 0.93, "Distill first, then quantize", fontsize=9, weight="bold", color=INK, va="top")
     ax.text(0.04, 0.80, "7 compact students \u00d7 6 teachers, pill retrieval,\nmeasured on the deployed 8-bit model",
             fontsize=6.3, color=INK2, va="top", linespacing=1.3)
     cols = (("PTQ", C_PTQ, "post-training\nquantization"), ("QAT", C_QAT, "fine-tune\nno teacher"),
@@ -71,7 +71,7 @@ def main():
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.axis("off")
-    tips = (("1", "Distill before quantizing:\ndistilled students lose a\nsmaller share to INT8", INK),
+    tips = (("1", "One distilled model serves\nevery route and loses a\nsmaller share to INT8", INK),
             ("2", "Measure the INT8 floor first:\nthe gain survives where it\nholds, vanishes if not", INK),
             ("3", "Low floor: fine-tune the\ndistilled model; a teacher\nduring it adds little", C_QAT))
     y = 0.86
