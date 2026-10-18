@@ -1238,13 +1238,14 @@ def tab_sens(R):
              r"\caption{Post-training quantization of A and of B distilled from ConvNeXt-S under other calibration "
              r"settings (seed 42, calibration draw of seed 123). The first two rows are the rules of the main benchmark. "
              r"Pct.: percentile; Entropy (2048): ONNX Runtime's entropy calibrator with 2048 histogram bins; FP32 head: "
-             r"the retrieval head, from the clamp of GeM pooling onward, kept in floating point. Floor: PTQ(A) per "
+             r"the retrieval head, from the clamp of the generalized mean (GeM) pooling onward, kept in floating "
+             r"point. Floor: PTQ(A) per "
              r"student. Below 0.1: the number of floors below 0.1. "
-             r"Benefit: PTQ(B) $-$ PTQ(A), the mean over the students. Kept: the students for which B keeps a "
-             r"larger share of its FP32 mAP than A, ties (a difference below 0.01) and the reverse.}",
-             r"\label{tab:sensptq}", r"\footnotesize", r"\setlength{\tabcolsep}{2pt}",
+             r"Benefit: PTQ(B) $-$ PTQ(A), the mean over the students. Retained: the students for which B retains a "
+             r"larger fraction of its FP32 mAP than A, ties (a difference below 0.01) and the reverse.}",
+             r"\label{tab:sensptq}", r"\footnotesize", r"\setlength{\tabcolsep}{1.8pt}",
              r"\begin{tabular}{@{}l" + "c" * len(order) + r"ccc@{}}", r"\toprule",
-             r" & \multicolumn{" + str(len(order)) + r"}{c}{Floor} & Below & & Kept \\",
+             r" & \multicolumn{" + str(len(order)) + r"}{c}{Floor} & Below & & Retained \\",
              r"\cmidrule(lr){2-" + str(len(order) + 1) + r"}",
              r"Calibration & " + " & ".join(short(x) for x in order) + r" & 0.1 & Benefit & B/tie/A \\",
              r"\midrule"]
