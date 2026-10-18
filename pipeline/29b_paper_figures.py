@@ -55,15 +55,34 @@ def save(fig, name):
     print(f"   wrote {os.path.join(OUT, name)}.pdf (+ .png preview)")
 
 
-def student_labels(ax, xs, names, min_gap):
-    """Student names along the top edge at their floor, each on a short leader; names whose floors nearly
-    coincide are moved apart along the edge and the leader shows where the student really sits."""
+def spread_positions(xs, min_gap):
+    """Where to draw students whose floors are xs: each run of floors closer than min_gap is spread evenly around
+    its own mean, min_gap apart, so the shifts stay small and symmetric; every other student stays at its floor."""
+    clusters = [[i] for i in sorted(range(len(xs)), key=lambda i: xs[i])]
+
+    def place(cl):
+        m = sum(xs[i] for i in cl) / len(cl)
+        return [m + (k - (len(cl) - 1) / 2) * min_gap for k in range(len(cl))]
+    merged = True
+    while merged:
+        merged = False
+        for j in range(len(clusters) - 1):
+            if place(clusters[j + 1])[0] - place(clusters[j])[-1] < min_gap - 1e-12:
+                clusters[j:j + 2] = [clusters[j] + clusters[j + 1]]
+                merged = True
+                break
+    out = list(xs)
+    for cl in clusters:
+        for i, x in zip(cl, place(cl)):
+            out[i] = x
+    return out
+
+
+def student_labels(ax, xs, placed, names):
+    """Student names along the top edge, at the positions the markers are drawn at; where a student was moved
+    away from its floor, a short leader runs from the label to the true floor on the top edge."""
     tr = mtransforms.blended_transform_factory(ax.transData, ax.transAxes)
-    items = sorted(zip(xs, names))
-    placed = []
-    for x, _ in items:
-        placed.append(x if not placed or x - placed[-1] >= min_gap else placed[-1] + min_gap)
-    for (x, n), xx in zip(items, placed):
+    for x, xx, n in zip(xs, placed, names):
         if abs(xx - x) > 1e-9:
             ax.plot([x, xx], [1.0, 1.035], transform=tr, color=MUTED, lw=0.45, clip_on=False)
         ax.text(xx, 1.02 if abs(xx - x) <= 1e-9 else 1.045, n, transform=tr, rotation=90, ha="center",
@@ -74,16 +93,18 @@ def fig_kept(R):
     fig, axes = plt.subplots(1, 2, figsize=(WIDTH, 2.55), sharey=True)
     series = (("kept_ptq", C_PTQ, "o", "PTQ: PTQ(B) $-$ PTQ(A)"), ("kept_qat", C_QAT, "s", "QAT: QAT(B) $-$ QAT(A)"),
               ("kept_both", C_QAKD, "^", "Both: QAKD(B) $-$ QAT(A)"))
+    dx = 0.02                      # the three series of a student side by side, in floor units
     for ax, rk in zip(axes, ("mm", "pc")):
         stu, order = R[rk]["stu"], R["order"]
         xs = [stu[s]["floor"] for s in order]
+        placed = spread_positions(xs, min_gap=0.064)
         ax.axhline(1.0, color=REF_B, lw=0.7, zorder=1)
         ax.axhline(0.0, color=REF_A, lw=0.7, zorder=1)
         ax.grid(axis="y", color=GRID, lw=0.5, zorder=0)
-        for key, col, mk, lab in series:
-            ax.scatter(xs, [stu[s][key] for s in order], s=24, color=col, marker=mk, edgecolors="white",
-                       linewidths=0.7, zorder=3, label=lab)
-        student_labels(ax, xs, [P.SHORT[s] for s in order], min_gap=0.045)
+        for j, (key, col, mk, lab) in enumerate(series):
+            ax.scatter([x + (j - 1) * dx for x in placed], [stu[s][key] for s in order], s=18, color=col, marker=mk,
+                       edgecolors="white", linewidths=0.6, zorder=3, label=lab)
+        student_labels(ax, xs, placed, [P.SHORT[s] for s in order])
         ax.set_xlim(-0.03, 0.75)
         ax.set_xlabel("INT8 floor, PTQ(A) test mAP")
         ax.set_title(RULE_TITLE[rk], loc="left", pad=34, fontsize=8)
@@ -105,14 +126,13 @@ def fig_added(R):
         sd = r["sig"]["both"]
         ax.axhspan(-2 * sd, 2 * sd, color="#d9d9d9", alpha=0.45, lw=0, zorder=0)
         ax.axhline(0.0, color=REF_B, lw=0.7, zorder=1)
-        xs = []
-        for s in order:
-            f = stu[s]["floor"]
-            xs.append(f)
+        xs = [stu[s]["floor"] for s in order]
+        placed = spread_positions(xs, min_gap=0.045)
+        for f, s in zip(placed, order):
             ax.scatter([f] * len(QJ.TEACHERS), [pairs[(s, t)]["added"] for t in QJ.TEACHERS], s=9, color=C_QAKD,
                        alpha=0.35, linewidths=0, zorder=2)
             ax.scatter([f], [stu[s]["added"]], s=30, color=C_QAKD, edgecolors="white", linewidths=0.9, zorder=3)
-        student_labels(ax, xs, [P.SHORT[s] for s in order], min_gap=0.045)
+        student_labels(ax, xs, placed, [P.SHORT[s] for s in order])
         rh = r["rho"]["added"]
         ax.text(0.98, 0.04, f"Spearman $\\rho = {rh['rho']:+.2f}$, one-sided $p = {rh['p_less']:.3f}$",
                 transform=ax.transAxes, ha="right", va="bottom", fontsize=7, color=INK)
@@ -173,8 +193,8 @@ def fig_routes(R):
     lg.plot([0.04, 0.12], [y0, y0], color=INK2, lw=0.6)
     lg.plot([0.04, 0.12], [y0 + 2 * sd, y0 + 2 * sd], color=INK2, lw=0.6)
     lg.set_xlim(0, 1)
-    lg.text(0.18, y0 + sd, f"$2\\sigma$ training noise of\none fine-tuned model ({2 * sd:.3f})", fontsize=6.5, color=INK2,
-            va="center", ha="left")
+    lg.text(0.18, y0 + sd, f"$2\\sigma$ training noise of one\nfine-tuned model, chain\nrepeats ({2 * sd:.3f})",
+            fontsize=6.5, color=INK2, va="center", ha="left")
     lg.text(0.0, 0.31, "Color and marker shape\ngive the route", fontsize=6.5, color=INK2, va="center")
     fig.subplots_adjust(hspace=0.42, wspace=0.10)
     save(fig, "fig_routes")
@@ -192,7 +212,8 @@ def fig_mech_accum(R, Mx):
     """Accumulated quantization noise along each student's backbone, PTQ(A) under both rules and QAT(A)."""
     order = R["order"]
     fig, axes = plt.subplots(2, 4, figsize=(WIDTH, 3.8), sharey=True, sharex=True)
-    series = (("PTQ_A", "mm", C_PTQ, "-", "PTQ(A), MinMax"), ("PTQ_A", "pc", C_PTQ, (0, (3, 1.6)), "PTQ(A), percentile"),
+    series = (("PTQ_A", "mm", C_PTQ, "-", "PTQ(A), MinMax"),
+              ("PTQ_A", "pc", C_PTQ, (0, (3, 1.6)), "PTQ(A), percentile 99.9"),
               ("QAT_A", "mm", C_QAT, "-", "QAT(A), learned ranges"))
     for ax, s in zip(axes.flat, order):
         ax.grid(axis="y", color=GRID, lw=0.5, zorder=0)
@@ -200,6 +221,9 @@ def fig_mech_accum(R, Mx):
         for cell, rule, col, ls, _ in series:
             d, v = Mx["profile"](cell, s, None, rule)
             ax.plot(d, running_median(v), color=col, lw=1.2, ls=ls, zorder=3)
+            # the running median lifts the end of a falling curve: the last tensor itself, unsmoothed
+            ax.scatter([d[-1]], [v[-1]], s=11, color=col, edgecolors="white", linewidths=0.4, zorder=4,
+                       clip_on=False)
         ax.set_title(f"{P.NAME[s]} ({int(float(Mx['stu'][s]['PTQ_A_mm_n_tensors']))})", fontsize=7.5, pad=3)
         ax.set_xlim(0, 1.0)
         ax.set_ylim(-8, 50)
@@ -211,6 +235,8 @@ def fig_mech_accum(R, Mx):
     lg = axes.flat[7]
     lg.axis("off")
     handles = [Line2D([], [], color=c, lw=1.4, ls=ls, label=lab) for _, _, c, ls, lab in series]
+    handles.append(Line2D([], [], marker="o", ls="", color=INK2, mec="white", mew=0.4, ms=3.6,
+                          label="last backbone tensor,\nunsmoothed"))
     handles.append(Line2D([], [], color=REF_B, lw=0.8, label="noise as strong as the signal"))
     lg.legend(handles=handles, loc="center left", frameon=False, fontsize=6.5, handlelength=2.4, borderaxespad=0.0,
               bbox_to_anchor=(-0.05, 0.55))
@@ -223,7 +249,7 @@ def fig_mech_geometry(R, Mx):
     teacher's neighbors each deployed student keeps. The article cites (a) first."""
     order = R["order"]
     st_ = Mx["stu"]
-    fig, axes = plt.subplots(1, 2, figsize=(WIDTH, 2.6), gridspec_kw={"width_ratios": [1, 1.25]})
+    fig, axes = plt.subplots(1, 2, figsize=(WIDTH, 2.9), gridspec_kw={"width_ratios": [1, 1.25]})
     ax = axes[1]
     ax.grid(axis="y", color=GRID, lw=0.5, zorder=0)
     cells = (("np_T_B", "#5c5c5c", "D", "B (FP32)"), ("np_T_PTQ_B", C_PTQ, "o", "PTQ(B)"),
@@ -236,15 +262,17 @@ def fig_mech_geometry(R, Mx):
     ax.set_xticklabels([P.SHORT[s] for s in order], fontsize=6.8, rotation=30, ha="right", rotation_mode="anchor")
     ax.set_ylabel("Teacher's 10 nearest kept (NP@10)")
     ax.set_ylim(0, 0.6)
-    ax.set_title("(b) Teacher's neighbors kept", loc="left", fontsize=8, pad=4)
+    ax.set_title("(b) Teacher's neighbors kept", loc="left", fontsize=8, pad=34)
     ax.legend(loc="lower left", frameon=False, fontsize=6.3, ncol=2, handletextpad=0.2, columnspacing=0.8,
               borderaxespad=0.2)
     ax = axes[0]
     ax.grid(axis="y", color=GRID, lw=0.5, zorder=0)
     fl = [R["mm"]["stu"][s]["floor"] for s in order]
-    for k, col, mk, lab in (("np_B_QAT_B", C_QAT, "s", "QAT(B)"), ("np_B_QAKD_B", C_QAKD, "^", "QAKD(B)")):
-        ax.scatter(fl, [float(st_[s][k]) for s in order], s=22, color=col, marker=mk, edgecolors="white",
-                   linewidths=0.6, zorder=3, label=lab)
+    placed = spread_positions(fl, min_gap=0.06)
+    for j, (k, col, mk, lab) in enumerate((("np_B_QAT_B", C_QAT, "s", "QAT(B)"), ("np_B_QAKD_B", C_QAKD, "^", "QAKD(B)"))):
+        ax.scatter([x + (j - 0.5) * 0.028 for x in placed], [float(st_[s][k]) for s in order], s=20, color=col,
+                   marker=mk, edgecolors="white", linewidths=0.6, zorder=3, label=lab)
+    student_labels(ax, fl, placed, [P.SHORT[s] for s in order])
     rh, p = P.spearman_two_sided(fl, [float(st_[s]["np_B_QAT_B"]) for s in order])
     ax.text(0.98, 0.04, f"QAT(B): $\\rho = {rh:+.2f}$, $p = {p:.3f}$", transform=ax.transAxes, ha="right",
             va="bottom", fontsize=6.8)
@@ -252,7 +280,7 @@ def fig_mech_geometry(R, Mx):
     ax.set_ylim(0.3, 0.9)
     ax.set_xlabel("INT8 floor, PTQ(A) test mAP")
     ax.set_ylabel("Start's 10 nearest kept (NP@10)")
-    ax.set_title("(a) Distilled start's neighbors kept", loc="left", fontsize=8, pad=4)
+    ax.set_title("(a) Distilled start's neighbors kept", loc="left", fontsize=8, pad=34)
     ax.legend(loc="upper left", frameon=False, fontsize=6.3, handletextpad=0.2, borderaxespad=0.2)
     fig.subplots_adjust(wspace=0.32)
     save(fig, "fig_mech_geometry")

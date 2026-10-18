@@ -70,13 +70,13 @@ def ratio(x, d=2):
     return f"\\ensuremath{{{s}}}" if s.startswith("-") else s
 
 
-WORDS = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten")
+WORDS = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve")
 ORDS = ("", "first", "second", "third", "fourth", "fifth", "sixth", "seventh")
 
 
 def define(key, value):
     DEFS.append(f"\\qjdef{{{key}}}{{{value}}}")
-    if isinstance(value, str) and value.isdigit() and int(value) <= 10:
+    if isinstance(value, str) and value.isdigit() and int(value) < len(WORDS):
         DEFS.append(f"\\qjdef{{{key}.w}}{{{WORDS[int(value)]}}}")   # the same count in words, for prose
 
 
@@ -87,20 +87,26 @@ def write(name, lines):
     print(f"   wrote {os.path.join(OUT, name)}")
 
 
-# ---------------------------------------------------------------- Table 1: models
+# ---------------------------------------------------------------- tab_models.tex: students and teachers
+def teachers_by_fp32(R):
+    """The six teachers from the most to the least accurate in FP32, the order of every table that lists them."""
+    return sorted(QJ.TEACHERS, key=lambda t: -float(R["teacher_fp32"][t]["test_mAP_FP32"]))
+
+
 def tab_models(R):
     mm, pc = R["mm"]["stu"], R["pc"]["stu"]
-    teachers = sorted(QJ.TEACHERS, key=lambda t: -float(R["teacher_fp32"][t]["test_mAP_FP32"]))
+    teachers = teachers_by_fp32(R)
     L = [r"\begin{table}[tbp]", r"\centering",
          r"\caption{Students and teachers. Params counts the deployed embedding network (backbone, pooling and "
          r"projection, without the training heads), with RepVGG-A0 in its fused deployment form. DW: depthwise "
          r"convolutions; SE: squeeze-and-excitation. mAP is measured on the test fold. For a student, FP32 is the "
          r"undistilled model A, and the two INT8 columns are A after post-training quantization with MinMax or "
-         r"percentile (99.9) calibration, which we call the student's INT8 floor. Teachers are used in FP32 only.}",
+         r"percentile 99.9 (P99.9) calibration, which we call the student's INT8 floor. Teachers are used in FP32 "
+         r"only.}",
          r"\label{tab:models}", r"\small", r"\setlength{\tabcolsep}{4pt}",
          r"\begin{tabular}{@{}lS[table-format=2.1]cclccc@{}}", r"\toprule",
          r" & {Params} & & & & & \multicolumn{2}{c}{INT8 floor} \\", r"\cmidrule(l){7-8}",
-         r"Model & {(M)} & DW & SE & Activation & FP32 & MinMax & Pct. \\", r"\midrule",
+         r"Model & {(M)} & DW & SE & Activation & FP32 & MinMax & P99.9 \\", r"\midrule",
          r"\multicolumn{8}{@{}l}{\emph{Students}} \\"]
     for s in R["order"]:
         dw, se, act = P.ARCH[s]
@@ -121,18 +127,21 @@ def tab_models(R):
     write("tab_models.tex", L)
 
 
-# ---------------------------------------------------------------- Table 2: effects per student
+# ---------------------------------------------------------------- tab_effects_student.tex, tab_effects_kept.tex: effects per student
 def tab_effects_student(R):
     cols = ("floor", "gF", "ptq", "qat", "rescue", "during", "both", "added")
     L = [r"\begin{table}[tbp]", r"\centering",
          r"\caption{Effects per student, as means over the six teachers (mAP, test fold). Floor: PTQ(A). "
-         r"$g_F$: B $-$ A in FP32. PTQ: PTQ(B) $-$ PTQ(A). QAT: QAT(B) $-$ QAT(A). Rescue: QAT(A) $-$ PTQ(A). "
+         r"B $-$ A: what the distilled start brings on each route, the FP32 gain $g_F$ (B $-$ A in FP32), the PTQ "
+         r"benefit PTQ(B) $-$ PTQ(A) and the QAT benefit QAT(B) $-$ QAT(A). Rescue: QAT(A) $-$ PTQ(A). "
          r"During: QAKD(A) $-$ QAT(A). Both: QAKD(B) $-$ QAT(A). Added: QAKD(B) $-$ QAT(B). Students are "
          r"ordered by their MinMax floor in both panels. Mean: the mean over the seven students. QAT(A) is a "
-         r"single fine-tuning run (seed 42); Table~\ref{tab:sensqata} gives it with three seeds.}",
+         r"single fine-tuning run (seed 42); Table~\ref{tab:studentsmore} gives the contrasts that use it with "
+         r"three seeds.}",
          r"\label{tab:students}", r"\small", r"\setlength{\tabcolsep}{4pt}",
          r"\begin{tabular}{@{}lcccccccc@{}}", r"\toprule",
-         r"Student & Floor & $g_F$ & PTQ & QAT & Rescue & During & Both & Added \\", r"\midrule"]
+         r" & & \multicolumn{3}{c}{B $-$ A} & & & & \\", r"\cmidrule(lr){3-5}",
+         r"Student & Floor & FP32 & PTQ & QAT & Rescue & During & Both & Added \\", r"\midrule"]
     for rk, title in (("mm", "(a) MinMax calibration"), ("pc", "(b) Percentile 99.9 calibration")):
         stu = R[rk]["stu"]
         if rk == "pc":
@@ -147,10 +156,50 @@ def tab_effects_student(R):
     write("tab_effects_student.tex", L)
 
 
-# ---------------------------------------------------------------- Table 3: pooled effects
+def tab_effects_student_more(R):
+    """Supplementary table: per student, the two contrasts of the factorial that Table S4 leaves out, the kept
+    shares, and the contrasts that use QAT(A) with QAT(A) averaged over its three fine-tuning seeds."""
+    qa = (R.get("sens") or {}).get("qata") or {}
+    if not all(("test", rk) in qa for rk in ("mm", "pc")):
+        print("   per-student kept shares: QAT(A) seeds not measured yet, no table")
+        return
+    L = [r"\begin{table}[tbp]", r"\centering",
+         r"\caption{Further effects per student, as means over the six teachers (test fold). Start: Start (QAKD), "
+         r"QAKD(B) $-$ QAKD(A). Inter.: the interaction, Start (QAKD) $-$ QAT benefit. Kept: the benefit divided by "
+         r"$g_F$ within the student, for the PTQ benefit, the QAT benefit and Both (a ratio; 1 keeps the whole FP32 "
+         r"gain). The grid columns use QAT(A) of seed 42, as Table~\ref{tab:students}; the last three recompute the "
+         r"QAT benefit, the interaction and the kept QAT share with QAT(A) averaged over its three fine-tuning seeds "
+         r"(Table~\ref{tab:sensqata}). Students are ordered by their MinMax floor in both panels. Mean: the mean over "
+         r"the seven students.}",
+         r"\label{tab:studentsmore}", r"\small", r"\setlength{\tabcolsep}{4pt}",
+         r"\begin{tabular}{@{}lcccccccc@{}}", r"\toprule",
+         r" & \multicolumn{5}{c}{Grid (seed 42)} & \multicolumn{3}{c}{QAT(A), mean of three seeds} \\",
+         r"\cmidrule(lr){2-6}\cmidrule(l){7-9}",
+         r" & & & \multicolumn{3}{c}{Kept} & & & Kept \\", r"\cmidrule(lr){4-6}\cmidrule(l){9-9}",
+         r"Student & Start & Inter. & PTQ & QAT & Both & QAT ben. & Inter. & QAT \\", r"\midrule"]
+    for rk, title in (("mm", "(a) MinMax calibration"), ("pc", "(b) Percentile 99.9 calibration")):
+        stu, res = R[rk]["stu"], qa[("test", rk)]
+        cols = (lambda s: stu[s]["b_vs_a"], lambda s: stu[s]["interaction"], lambda s: stu[s]["kept_ptq"],
+                lambda s: stu[s]["kept_qat"], lambda s: stu[s]["kept_both"],
+                lambda s: res["eff"]["qat"]["new"]["per"][s], lambda s: res["eff"]["interaction"]["new"]["per"][s],
+                lambda s: res["kept"]["new"][s])
+        fmt = (sgn, sgn, ratio, ratio, ratio, sgn, sgn, ratio)
+        if rk == "pc":
+            L.append(r"\midrule")
+        L.append(r"\multicolumn{9}{@{}l}{\emph{" + title + r"}} \\")
+        for s in R["order"]:
+            L.append(P.NAME[s] + " & " + " & ".join(f(c(s)) for c, f in zip(cols, fmt)) + r" \\")
+        L.append(r"\addlinespace[2pt]")
+        L.append("Mean & " + " & ".join(f(st.mean(c(s) for s in R["order"])) for c, f in zip(cols, fmt)) + r" \\")
+    L += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
+    write("tab_effects_kept.tex", L)
+
+
+# ---------------------------------------------------------------- tab_effects_pooled.tex: pooled effects
 def tab_effects_pooled(R):
     L = [r"\begin{table}[tbp]", r"\centering",
-         r"\caption{Pooled effects: the mean over the seven students of the per-student means over the six "
+         r"\caption{Pooled effects (test fold; mAP, except the kept shares, which are ratios): the mean over the "
+         r"seven students of the per-student means over the six "
          r"teachers, with 95\% cluster bootstrap intervals over students (10{,}000 resamples) and, as a small-sample "
          r"check, 95\% t intervals on the seven student means. $\rho$: Spearman "
          r"correlation over the seven students between the effect and the INT8 floor under the same calibration "
@@ -180,7 +229,7 @@ def tab_effects_pooled(R):
     write("tab_effects_pooled.tex", L)
 
 
-# ---------------------------------------------------------------- Table 4: noise and sign counts
+# ---------------------------------------------------------------- tab_noise.tex: noise and sign counts
 def tab_noise(R):
     mm, pc = R["mm"], R["pc"]
     L = [r"\begin{table}[tbp]", r"\centering",
@@ -220,37 +269,48 @@ def tab_noise(R):
     write("tab_noise.tex", L)
 
 
-# ---------------------------------------------------------------- Table 5: the teacher's share
+# ---------------------------------------------------------------- tab_teacher.tex: the teacher's share
 def tab_teacher(R):
+    keys = (("gF", "FP32 gain $g_F$"), ("ptq", "PTQ benefit"), ("qat", "QAT benefit"),
+            ("during", "During"), ("both", "Both"), ("added", "Added"))
+    ntests = 2 * len(keys) - 1        # the FP32 gain is the same test under both rules
     L = [r"\begin{table}[tbp]", r"\centering",
          r"\caption{How much the choice of teacher matters. (a) Share: share of the total sum of squares of the "
-         r"$7\times 6$ matrix of pair effects explained by the teacher (column means), the quantity H5 compares. "
-         r"Spread: range of the six teacher means (mAP). $p$: $F$ test "
+         r"$7\times 6$ matrix of pair effects explained by the teacher (column means), the quantity H5 compares, "
+         r"and by the student (row means). Spread: range of the six teacher means (mAP). $p$: $F$ test "
          r"of the teacher's main effect against the student by teacher residual (two-way analysis of variance without "
-         r"replication, 5 and 30 degrees of freedom), exploratory and not corrected for the twelve tests. (b) Students "
+         r"replication, 5 and 30 degrees of freedom), exploratory and not corrected for the " + WORDS[ntests]
+         + r" tests. The FP32 gain does not depend on the calibration rule and is repeated under both as the "
+         r"reference. (b) Students "
          r"whose best teacher for the INT8 model is also their best teacher in FP32 (highest B), out of seven; one "
          r"in six would agree by chance.}",
-         r"\label{tab:teacher}", r"\small", r"\setlength{\tabcolsep}{5pt}",
-         r"\begin{tabular}{@{}lcccccc@{}}", r"\toprule",
-         r" & \multicolumn{3}{c}{MinMax} & \multicolumn{3}{c}{Percentile 99.9} \\",
-         r"\cmidrule(lr){2-4}\cmidrule(l){5-7}",
-         r"\emph{(a) Teacher effect} & Share & Spread & $p$ & Share & Spread & $p$ \\", r"\midrule"]
-    for k, name in (("gF", "FP32 gain $g_F$"), ("ptq", "PTQ benefit"), ("qat", "QAT benefit"),
-                    ("during", "During"), ("both", "Both"), ("added", "Added")):
+         r"\label{tab:teacher}", r"\small", r"\setlength{\tabcolsep}{3.5pt}",
+         r"\begin{tabular}{@{}lcccccccc@{}}", r"\toprule",
+         r" & \multicolumn{4}{c}{MinMax} & \multicolumn{4}{c}{Percentile 99.9} \\",
+         r"\cmidrule(lr){2-5}\cmidrule(l){6-9}",
+         r" & \multicolumn{2}{c}{Share} & & & \multicolumn{2}{c}{Share} & & \\",
+         r"\cmidrule(lr){2-3}\cmidrule(lr){6-7}",
+         r"Effect & Teacher & Student & Spread & $p$ & Teacher & Student & Spread & $p$ \\", r"\midrule",
+         r"\multicolumn{9}{@{}l}{\emph{(a) Teacher effect}} \\"]
+    for k, name in keys:
         a, b = R["mm"]["shares"][k], R["pc"]["shares"][k]
         fa, fb = R["mm"]["anova"][k], R["pc"]["anova"][k]
-        L.append(f"{name} & {ratio(a['teacher'])} & {num(fa['spread'])} & {pv(fa['p'])} & "
-                 f"{ratio(b['teacher'])} & {num(fb['spread'])} & {pv(fb['p'])} \\\\")
-    L += [r"\midrule", r"\emph{(b) Best teacher agrees with FP32} & \multicolumn{3}{c}{MinMax} & \multicolumn{3}{c}{Percentile 99.9} \\",
-          r"\midrule"]
+        L.append(f"{name} & {num(a['teacher'])} & {ratio(a['student'])} & {num(fa['spread'])} & {pv(fa['p'])} & "
+                 f"{num(b['teacher'])} & {ratio(b['student'])} & {num(fb['spread'])} & {pv(fb['p'])} \\\\")
+    L += [r"\midrule", r"\multicolumn{9}{@{}l}{\emph{(b) Best teacher agrees with FP32}} \\"]
     for c, name in (("PTQ_B", "PTQ(B)"), ("QAT_B", "QAT(B)"), ("QAKD_B", "QAKD(B)")):
-        L.append(f"{name} & \\multicolumn{{3}}{{c}}{{{R['mm']['agree'][c]['n']} of 7}} & "
-                 f"\\multicolumn{{3}}{{c}}{{{R['pc']['agree'][c]['n']} of 7}} \\\\")
+        L.append(f"{name} & \\multicolumn{{4}}{{c}}{{{R['mm']['agree'][c]['n']} of 7}} & "
+                 f"\\multicolumn{{4}}{{c}}{{{R['pc']['agree'][c]['n']} of 7}} \\\\")
     L += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
     write("tab_teacher.tex", L)
+    define("teacher.ntests", str(ntests))
+    # the p values of the teacher's main effect after quantization under MinMax, against that of the FP32 gain
+    pq = [R["mm"]["anova"][k]["p"] for k, _ in keys if k != "gF"]
+    define("mm.anova.after.pmin", pv(min(pq)))
+    define("mm.anova.after.pmax", pv(max(pq)))
 
 
-# ---------------------------------------------------------------- Table 6: deployment cost
+# ---------------------------------------------------------------- tab_deploy.tex: deployment cost
 # marketing names of the measured phone and its chip (model and SoC codes as Android reports them)
 DEVICE_NAMES = {"SM-A176B": "Samsung Galaxy A17 5G (SM-A176B)"}
 SOC_NAMES = {"s5e8535": "Exynos 1330"}
@@ -284,7 +344,7 @@ def tab_deploy(R):
     soc = SOC_NAMES.get(str(dev.get("soc_model", "")).lower(),
                         f"{dev.get('soc_manufacturer', '')} {dev.get('soc_model', '')}".strip() or dev.get("hardware", ""))
     L = [r"\begin{table}[tbp]", r"\centering",
-         r"\caption{Deployment cost on a desktop CPU (Intel Core i7-13700F, four physical cores pinned, ONNX Runtime "
+         r"\caption{Deployment cost on a desktop CPU (Intel Core i7-13700F, four performance cores pinned, ONNX Runtime "
          r"1.26.0, CPU execution provider), one $224\times 224$ image at batch size 1. Size: ONNX file. Latency: "
          + (r"median over five round-robin rounds of the per-round median of 200 timed runs. "
             if rr else r"median of 200 timed runs. ")
@@ -295,7 +355,7 @@ def tab_deploy(R):
              + r"), ONNX Runtime 1.26.0 for Android, CPU execution provider, pinned to its four fastest cores ("
              + _core_mix(dev) + r"), same protocol. On the phone the per-round medians varied by up to "
              r"\qjv{lat.ph.spread4.max}\% between rounds on four threads, against \qjv{lat.ph.spread1.max}\% on one, so "
-             r"the text reads the one-thread values.")
+             r"the four-thread values are in parentheses and the text reads the one-thread ones.")
             if phone else "") + "}",
          r"\label{tab:deploy}", r"\small", r"\setlength{\tabcolsep}{3pt}",
          r"\begin{tabular}{@{}l*{9}{S[table-format=" + ("3.1" if phone and max(
@@ -339,9 +399,11 @@ def tab_deploy(R):
         for s in R["order"]:
             a32, a8, k8 = (ph[(s, n, p)] for n, p in nets)
             g = lambda r, c: float(r[c])  # noqa: E731
+            # four threads span the phone's fast and slow cores and varied widely between rounds: in parentheses
             L.append(f"{P.NAME[s]} & & & & "
                      f"{g(a32, 'lat_t1_median_ms'):.1f} & {g(a8, 'lat_t1_median_ms'):.1f} & {g(k8, 'lat_t1_median_ms'):.1f} & "
-                     f"{g(a32, 'lat_t4_median_ms'):.1f} & {g(a8, 'lat_t4_median_ms'):.1f} & {g(k8, 'lat_t4_median_ms'):.1f} \\\\")
+                     f"{{({g(a32, 'lat_t4_median_ms'):.1f})}} & {{({g(a8, 'lat_t4_median_ms'):.1f})}} & "
+                     f"{{({g(k8, 'lat_t4_median_ms'):.1f})}} \\\\")
             k = KEY[s]
             for t in (1, 4):
                 define(f"lat.ph.{k}.t{t}.fp", f"{g(a32, f'lat_t{t}_median_ms'):.1f}")
@@ -427,12 +489,15 @@ def tab_deploy(R):
         define("lat.load.max", f"{float(srch[0]['load_max']):.2f}" if srch[0].get("load_max") else "n/a")
 
 
-# ---------------------------------------------------------------- Table 7: the INT8 model each route delivers
+# ---------------------------------------------------------------- tab_routes.tex: the INT8 model each route delivers
 def tab_routes(R):
     cells = ("PTQ_A", "PTQ_B", "QAT_A", "QAT_B", "QAKD_A", "QAKD_B")
     L = [r"\begin{table}[tbp]", r"\centering",
          r"\caption{INT8 mAP each deployment route delivers (test fold; means over the six teachers for the cells "
-         r"that have one). The best INT8 route of each student is in bold. Gap: the best INT8 route minus the "
+         r"that have one). PTQ(A) is the student's INT8 floor (Table~\ref{tab:models}). The best INT8 route of each "
+         r"student is in bold; it is always QAT(B) or QAKD(B), and for every student these two lie within twice "
+         r"the training noise of one fine-tuned model of each other, so the bold marks the higher of two means "
+         r"that the noise cannot separate. Gap: the best INT8 route minus the "
          r"distilled FP32 model B; a negative gap is what the student still loses to quantization on its best "
          r"route. QAT(A) is a single fine-tuning run (seed 42); Section~\ref{sec:noise} gives it with three seeds.}",
          r"\label{tab:routes}", r"\small", r"\setlength{\tabcolsep}{4pt}",
@@ -448,6 +513,9 @@ def tab_routes(R):
         for s in R["order"]:
             vals = {c: stu[s][c] for c in cells}
             best = max(vals, key=vals.get)
+            # the caption's reading of the bold: QAT(B) or QAKD(B), within twice the noise of one fine-tuned model
+            if best not in ("QAT_B", "QAKD_B") or abs(vals["QAKD_B"] - vals["QAT_B"]) >= 2 * R[rk]["sig"]["QAKD_B"]:
+                sys.exit(f"tab_routes: the caption's reading of the best route no longer holds for {s} ({rk})")
             txt = [(r"\textbf{" + num(vals[c]) + "}") if c == best else num(vals[c]) for c in cells]
             gap = vals[best] - stu[s]["B_fp32"]
             L.append(f"{P.NAME[s]} & {num(stu[s]['B_fp32'])} & " + " & ".join(txt) + f" & {sgn(gap)} \\\\")
@@ -467,7 +535,7 @@ def tab_routes(R):
     write("tab_routes.tex", L)
 
 
-# ---------------------------------------------------------------- Appendix: all 42 pairs
+# ---------------------------------------------------------------- tab_pairs_mm.tex, tab_pairs_pc.tex: all 42 pairs
 def tab_pairs(R, rk):
     stu, pairs = R[rk]["stu"], R[rk]["pairs"]
     rule = "MinMax" if rk == "mm" else "percentile 99.9"
@@ -484,7 +552,7 @@ def tab_pairs(R, rk):
         if i:
             L.append(r"\addlinespace[1.5pt]")
         L.append(f"{P.NAME[s]} & none (A) & {num(stu[s]['A_fp32'])} & {num(stu[s]['PTQ_A'])} & {num(stu[s]['QAT_A'])} & & \\\\")
-        for t in QJ.TEACHERS:
+        for t in teachers_by_fp32(R):
             e = pairs[(s, t)]
             L.append(f" & {P.NAME[t]} & {num(e['B_fp32'])} & {num(e['PTQ_B'])} & {num(e['QAT_B'])} & "
                      f"{num(e['QAKD_A'])} & {num(e['QAKD_B'])} \\\\")
@@ -492,26 +560,27 @@ def tab_pairs(R, rk):
     write(f"tab_pairs_{rk}.tex", L)
 
 
-# ---------------------------------------------------------------- Table 9: the mechanism, quantization noise
+# ---------------------------------------------------------------- tab_mech.tex: the mechanism, quantization noise
 def tab_mech(R, Mx):
     st_ = Mx["stu"]
     g = lambda s, k: float(st_[s][k])  # noqa: E731
     L = [r"\begin{table}[tbp]", r"\centering",
-         r"\caption{Quantization noise of the undistilled students on the validation analysis set. Tensors: "
-         r"activation tensors the deployed INT8 graph quantizes. Bulk bits: median over those tensors of the "
-         r"effective bits the deployed quantizer leaves to the central 99.8\% of a tensor's values. Backbone "
+         r"\caption{Quantization noise of the undistilled students on the validation analysis set. Bulk bits: "
+         r"median, over the activation tensors the deployed INT8 graph quantizes (counted in Table~\ref{tab:fidelity}), "
+         r"of the effective bits the deployed quantizer leaves to the central 99.8\% of a tensor's values. Backbone "
          r"SQNR: accumulated signal-to-quantization-noise ratio of the backbone's last quantized tensor, the "
          r"features the retrieval head pools. Emb.\ cosine: mean cosine between the INT8 and the FP32 "
-         r"embedding of the same image. MinMax and Pct.\ are PTQ(A) under the two calibration rules; QAT(A) "
-         r"carries its learned ranges.}",
-         r"\label{tab:mech}", r"\footnotesize", r"\setlength{\tabcolsep}{3.2pt}",
-         r"\begin{tabular}{@{}lcccccccccc@{}}", r"\toprule",
-         r" & & \multicolumn{3}{c}{Bulk bits} & \multicolumn{3}{c}{Backbone SQNR (dB)} & "
+         r"embedding of the same image. MinMax and P99.9 are PTQ(A) under the two calibration rules (P99.9: "
+         r"percentile 99.9); QAT(A) carries its learned ranges, and its SQNR takes its own unrounded graph as the "
+         r"reference, so it counts the rounding error only and is not comparable with the two PTQ(A) columns.}",
+         r"\label{tab:mech}", r"\footnotesize", r"\setlength{\tabcolsep}{4pt}",
+         r"\begin{tabular}{@{}lccccccccc@{}}", r"\toprule",
+         r" & \multicolumn{3}{c}{Bulk bits} & \multicolumn{3}{c}{Backbone SQNR (dB)} & "
          r"\multicolumn{2}{c}{Emb.\ cosine} \\",
-         r"\cmidrule(lr){3-5}\cmidrule(lr){6-8}\cmidrule(l){9-10}",
-         r"Student & Tensors & MinMax & Pct. & QAT(A) & MinMax & Pct. & QAT(A) & MinMax & Pct. \\", r"\midrule"]
+         r"\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(l){8-9}",
+         r"Student & MinMax & P99.9 & QAT(A) & MinMax & P99.9 & QAT(A) & MinMax & P99.9 \\", r"\midrule"]
     for s in R["order"]:
-        L.append(f"{P.NAME[s]} & {int(g(s, 'PTQ_A_mm_n_tensors'))} & {g(s, 'PTQ_A_mm_bulk_bits_median'):.1f} & "
+        L.append(f"{P.NAME[s]} & {g(s, 'PTQ_A_mm_bulk_bits_median'):.1f} & "
                  f"{g(s, 'PTQ_A_pc_bulk_bits_median'):.1f} & {g(s, 'QAT_A_mm_bulk_bits_median'):.1f} & "
                  f"{dbf(g(s, 'PTQ_A_mm_acc_bb_end'))} & {dbf(g(s, 'PTQ_A_pc_acc_bb_end'))} & "
                  f"{dbf(g(s, 'QAT_A_mm_acc_bb_end'))} & {num(g(s, 'cos_own_PTQ_A_mm'), 2)} & "
@@ -990,7 +1059,7 @@ def tab_anchor(R):
          r"with the start's own frozen FP32 model in place of the teacher in the cosine term. Start B: one seed, B "
          r"distilled from ConvNeXt-S, beside QAT(B) and QAKD(B) of the same start. "
          + (r"Start A: QANC(A) is the mean over three seeds, beside QAT(A) (seed 42) and QAKD(A) with ConvNeXt-S, the "
-            r"control's own teacher, and averaged over the six teachers. " if with_a else "")
+            r"control's own teacher, and averaged over the six teachers, QAKD (6). " if with_a else "")
          + r"Students are ordered by their MinMax floor.}",
          r"\label{tab:anchor}", r"\small", r"\setlength{\tabcolsep}{3.5pt}",
          r"\begin{tabular}{@{}l" + ("ccccccc" if with_a else "ccc") + r"@{}}", r"\toprule",
@@ -1064,7 +1133,8 @@ def tab_ed(R):
          r"Every run starts from A and trains for 80 more epochs: 40 in FP32 without the teacher ConvNeXt-S (FT40) "
          r"or with it (KD40), then 40 of quantization-aware fine-tuning. QAT(FT40) has no teacher, QAT(KD40) had the "
          r"teacher before quantization and QAKD(FT40) has it during quantization; Timing is QAT(KD40) $-$ QAKD(FT40). "
-         r"Students are ordered by their MinMax floor.}",
+         r"Students are ordered by their MinMax floor. The last row of each panel gives the 90\% t interval of the "
+         r"mean Timing, which the declared reading compares with $\pm$\qjv{ed.test.mm.margin}.}",
          r"\label{tab:ed}", r"\small", r"\setlength{\tabcolsep}{5pt}",
          r"\begin{tabular}{@{}lcccc@{}}", r"\toprule",
          r"Student & QAT(FT40) & QAT(KD40) & QAKD(FT40) & Timing \\", r"\midrule"]
@@ -1081,6 +1151,8 @@ def tab_ed(R):
         L.append(r"\addlinespace[2pt]")
         L.append("Mean & " + " & ".join(fmt(k, st.mean(res["rows"][s][k] for s in R["order"])) for k in cols)
                  + r" \\")
+        tm = res["summ"]["timing"]
+        L.append(r"\multicolumn{4}{@{}l}{90\% t interval of the mean} & " + ci(tm["lo90"], tm["hi90"]) + r" \\")
     L += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
     write("tab_ed.tex", L)
     tw = {"timing": "the stage matters", "negligible": "negligible at this dose", "undecided": "undecided"}
@@ -1134,15 +1206,16 @@ def tab_fidelity(R):
     pil = rd("pilot.csv")
     L = [r"\begin{table}[tbp]", r"\centering",
          r"\caption{What the deployed graphs quantize, and how the simulated accuracy that selects a fine-tuned "
-         r"checkpoint carries over to the deployed graph. Quant. points: QuantizeLinear nodes of PTQ(A) under "
-         r"MinMax, and those that quantize the output of a convolution or linear layer. Learned ranges: clipping "
+         r"checkpoint carries over to the deployed graph. Quantized tensors: the activation tensors the deployed "
+         r"PTQ(A) graph quantizes under MinMax (its QuantizeLinear nodes), all of them and those at the output of a "
+         r"convolution or linear layer. Learned ranges: clipping "
          r"ranges of a QAKD(B) model (ConvNeXt-S), exported as Clip nodes; rounded twice: Clip nodes that ONNX "
          r"Runtime keeps in floating point between a dequantization and a requantization. Deployed over simulated: "
          r"validation mAP of the deployed INT8 graph (MinMax) divided by the simulated validation mAP of the selected "
          r"checkpoint, mean over the six teachers where a cell has them (seed 42).}",
-         r"\label{tab:fidelity}", r"\footnotesize", r"\setlength{\tabcolsep}{3.5pt}",
+         r"\label{tab:fidelity}", r"\footnotesize", r"\setlength{\tabcolsep}{3.2pt}",
          r"\begin{tabular}{@{}lcccccccc@{}}", r"\toprule",
-         r" & \multicolumn{2}{c}{Quant. points} & \multicolumn{2}{c}{Learned ranges} & "
+         r" & \multicolumn{2}{c}{Quantized tensors} & \multicolumn{2}{c}{Learned ranges} & "
          r"\multicolumn{4}{c}{Deployed over simulated} \\",
          r"\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(l){6-9}",
          r"Student & All & Conv. & All & Twice & QAT(A) & QAT(B) & QAKD(A) & QAKD(B) \\", r"\midrule"]
@@ -1218,6 +1291,14 @@ def guide_numbers(R):
     for s in R["order"]:     # per-student means over the six teachers, for the guide table
         define(f"guide.{KEY[s]}.ptqb.test", num(st.mean(pairs[(s, t)]["PTQ_B"] for t in QJ.TEACHERS)))
         define(f"guide.{KEY[s]}.ptqb.val", num(st.mean(V[("B", s, t, QJ.FP32_SEED)]["int8"] for t in QJ.TEACHERS)))
+    # what the most accurate INT8 route adds over the recommended one under percentile calibration, from the values
+    # Table 3 prints (PTQ(B) for the high-floor students, QAT(B) for the others)
+    pc = R["pc"]["stu"]
+    cells = ("PTQ_A", "PTQ_B", "QAT_A", "QAT_B", "QAKD_A", "QAKD_B")
+    for s in R["order"]:
+        rec = "PTQ_B" if s in high else "QAT_B"
+        best = max(cells, key=lambda c: pc[s][c])
+        define(f"guide.{KEY[s]}.bestgain", sgn(round(pc[s][best], 3) - round(pc[s][rec], 3)))
 
 
 CFG_KEY = {"minmax": "mm", "pct99.9": "pc", "entropy2048": "ent", "pct99.99": "pcb", "pct99.999": "pcc",
@@ -1237,14 +1318,15 @@ def tab_sens(R):
         L = [r"\begin{table}[tbp]", r"\centering",
              r"\caption{Post-training quantization of A and of B distilled from ConvNeXt-S under other calibration "
              r"settings (seed 42, calibration draw of seed 123). The first two rows are the rules of the main benchmark. "
-             r"Pct.: percentile; Entropy (2048): ONNX Runtime's entropy calibrator with 2048 histogram bins; FP32 head: "
-             r"the retrieval head, from the clamp of the generalized mean (GeM) pooling onward, kept in floating "
-             r"point. Floor: PTQ(A) per "
-             r"student. Below 0.1: the number of floors below 0.1. "
+             r"P99.9, P99.99 and P99.999: percentile calibration that keeps the central 99.9\%, 99.99\% and 99.999\% "
+             r"of the observed values; Entropy (2048): ONNX Runtime's entropy calibrator with 2048 histogram bins; "
+             r"FP32 head: the retrieval head, from the clamp of the generalized mean (GeM) pooling onward, kept in "
+             r"floating point. Floor: PTQ(A) per student, abbreviated as in Fig.~\Afigkept{} of the article. Below "
+             r"0.1: the number of floors below 0.1. "
              r"Benefit: PTQ(B) $-$ PTQ(A), the mean over the students. Retained: the students for which B retains a "
              r"larger fraction of its FP32 mAP than A, ties (a difference below 0.01) and the reverse.}",
              r"\label{tab:sensptq}", r"\footnotesize", r"\setlength{\tabcolsep}{1.8pt}",
-             r"\begin{tabular}{@{}l" + "c" * len(order) + r"ccc@{}}", r"\toprule",
+             r"\begin{tabular}{@{}l@{\hspace{5pt}}" + "c" * len(order) + r"ccc@{}}", r"\toprule",
              r" & \multicolumn{" + str(len(order)) + r"}{c}{Floor} & Below & & Retained \\",
              r"\cmidrule(lr){2-" + str(len(order) + 1) + r"}",
              r"Calibration & " + " & ".join(short(x) for x in order) + r" & 0.1 & Benefit & B/tie/A \\",
@@ -1287,7 +1369,9 @@ def tab_sens(R):
         L = [r"\begin{table}[tbp]", r"\centering",
              r"\caption{Calibration noise of the fine-tuned models. (a) The standard deviation of their test mAP over five "
              r"calibration draws (seeds 123 to 523), for QAT(A), QAT(B) and QAKD(B) with ConvNeXt-S (seed 42). Pooled: "
-             r"the root mean variance over the seven students. Combined: twice the calibration variance added to the "
+             r"the root mean variance over the seven students; All three: the same over the three models together. "
+             r"Training, Both: the training noise of Table~\ref{tab:noise}. Combined: twice the calibration variance "
+             r"added to the "
              r"training variance of Both, treated as independent, the noise of a difference between two fine-tuned "
              r"models. (b) The pair counts of Table~\ref{tab:noise}(b) recomputed with twice the combined noise.}",
              r"\label{tab:senscal}", r"\small", r"\setlength{\tabcolsep}{4pt}",
@@ -1302,12 +1386,12 @@ def tab_sens(R):
                                                     for ck in cks) + r" \\")
         L += [r"\addlinespace[2pt]",
               r"Pooled & " + " & ".join(num(cal[rk]["by_model"][ck]) for rk in ("mm", "pc") for ck in cks) + r" \\",
-              r"All three & \multicolumn{3}{c}{" + num(cal["mm"]["sd_cal"], 4) + r"} & \multicolumn{3}{c}{"
-              + num(cal["pc"]["sd_cal"], 4) + r"} \\",
-              r"Training, Both & \multicolumn{3}{c}{" + num(cal["mm"]["sd_both"], 4) + r"} & \multicolumn{3}{c}{"
-              + num(cal["pc"]["sd_both"], 4) + r"} \\",
-              r"Combined, difference & \multicolumn{3}{c}{" + num(cal["mm"]["sd_total_diff"], 4) + r"} & \multicolumn{3}{c}{"
-              + num(cal["pc"]["sd_total_diff"], 4) + r"} \\",
+              r"All three & \multicolumn{3}{c}{" + num(cal["mm"]["sd_cal"]) + r"} & \multicolumn{3}{c}{"
+              + num(cal["pc"]["sd_cal"]) + r"} \\",
+              r"Training, Both & \multicolumn{3}{c}{" + num(cal["mm"]["sd_both"]) + r"} & \multicolumn{3}{c}{"
+              + num(cal["pc"]["sd_both"]) + r"} \\",
+              r"Combined, difference & \multicolumn{3}{c}{" + num(cal["mm"]["sd_total_diff"]) + r"} & \multicolumn{3}{c}{"
+              + num(cal["pc"]["sd_total_diff"]) + r"} \\",
               r"\midrule",
               r"\multicolumn{7}{@{}l}{\emph{(b) Pairs with a clear gain, within noise and with a clear loss, combined noise}} \\",
               r" & \multicolumn{3}{c}{MinMax} & \multicolumn{3}{c}{Percentile 99.9} \\",
@@ -1344,7 +1428,8 @@ def tab_sens(R):
              r"cosine term (FT40), with A's own frozen FP32 model in it (ANC40) or with the teacher ConvNeXt-S (KD40); "
              r"means over three seeds. FP32: mAP of the network; retained: the fraction of it kept after "
              r"post-training quantization, PTQ mAP over FP32 mAP. $D_1$ = retained fraction of KD40 $-$ that of ANC40, "
-             r"$D_0$ = ANC40 $-$ FT40.}",
+             r"$D_0$ = ANC40 $-$ FT40. Mean: the mean over the seven students, with the 95\% t intervals of $D_1$ and "
+             r"$D_0$ below it.}",
              r"\label{tab:sensanc}", r"\footnotesize", r"\setlength{\tabcolsep}{3.5pt}",
              r"\begin{tabular}{@{}lcccccccc@{}}", r"\toprule",
              r" & \multicolumn{3}{c}{FP32} & \multicolumn{3}{c}{Retained} & & \\",
@@ -1357,14 +1442,15 @@ def tab_sens(R):
             L.append(r"\multicolumn{9}{@{}l}{\emph{" + title + r"}} \\")
             for x in order:
                 r = res["rows"][x]
-                L.append(f"{P.NAME[x]} & {num(r['ft32'])} & {num(r['anc32'])} & {num(r['kd32'])} & {ratio(r['ft'])} & "
-                         f"{ratio(r['anc'])} & {ratio(r['kd'])} & {sgn(r['d1'])} & {sgn(r['d0'])} \\\\")
+                L.append(f"{P.NAME[x]} & {num(r['ft32'])} & {num(r['anc32'])} & {num(r['kd32'])} & {num(r['ft'])} & "
+                         f"{num(r['anc'])} & {num(r['kd'])} & {sgn(r['d1'])} & {sgn(r['d0'])} \\\\")
             sm = res["summ"]
+            mean = lambda k: st.mean(res["rows"][x][k] for x in order)  # noqa: E731
             L.append(r"\addlinespace[2pt]")
-            L.append(r"Mean & \multicolumn{6}{l}{95\% t intervals} & " +
-                     f"{sgn(sm['d1']['mean'])} & {sgn(sm['d0']['mean'])} \\\\")
-            L.append(r" & \multicolumn{6}{l}{} & \makecell{" + ci(sm['d1']['lo95'], sm['d1']['hi95']).replace(", ", r",\\")
-                     + r"} & \makecell{" + ci(sm['d0']['lo95'], sm['d0']['hi95']).replace(", ", r",\\") + r"} \\")
+            L.append("Mean & " + " & ".join(num(mean(k)) for k in ("ft32", "anc32", "kd32", "ft", "anc", "kd")) +
+                     f" & {sgn(sm['d1']['mean'])} & {sgn(sm['d0']['mean'])} \\\\")
+            L.append(r"\multicolumn{9}{@{}r@{}}{95\% t interval: $D_1$ " + ci(sm['d1']['lo95'], sm['d1']['hi95'])
+                     + r", $D_0$ " + ci(sm['d0']['lo95'], sm['d0']['hi95']) + r"} \\")
         L += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
         write("tab_sens_anc.tex", L)
     for (fold, rk), res in anc.items():
@@ -1387,8 +1473,9 @@ def tab_sens(R):
              r"\caption{QAT(A) with three fine-tuning seeds (test fold). (a) QAT(A) of the grid (seed 42) and with "
              r"seeds 123 and 223, all from A of seed 42, and their standard deviation. (b) The five contrasts that use "
              r"QAT(A), pooled over the students, with QAT(A) of seed 42 (grid) and with the mean of the three seeds; "
-             r"95\% cluster bootstrap and t intervals. The plan declared the first four; the Interaction, which "
-             r"contains QAT(A) as well, was added after reading them.}",
+             r"each cell gives the mean, its 95\% cluster bootstrap interval and its 95\% t interval, from top to "
+             r"bottom. The plan declared the first four; the interaction, which contains QAT(A) as well, was added "
+             r"after reading them.}",
              r"\label{tab:sensqata}", r"\footnotesize", r"\setlength{\tabcolsep}{3.5pt}",
              r"\begin{tabular}{@{}lcccccccc@{}}", r"\toprule",
              r" & \multicolumn{4}{c}{MinMax} & \multicolumn{4}{c}{Percentile 99.9} \\",
@@ -1401,6 +1488,8 @@ def tab_sens(R):
         L.append(r"Pooled sd & \multicolumn{4}{r}{" + num(qa[("test", "mm")]["sd_pooled"]) + r"} & \multicolumn{4}{r}{"
                  + num(qa[("test", "pc")]["sd_pooled"]) + r"} \\")
         L += [r"\midrule", r"\multicolumn{9}{@{}l}{\emph{(b) Pooled contrasts}} \\",
+              r" & \multicolumn{4}{c}{MinMax} & \multicolumn{4}{c}{Percentile 99.9} \\",
+              r"\cmidrule(lr){2-5}\cmidrule(l){6-9}",
               r"Contrast & \multicolumn{2}{c}{Grid} & \multicolumn{2}{c}{Three seeds} & \multicolumn{2}{c}{Grid} & "
               r"\multicolumn{2}{c}{Three seeds} \\", r"\midrule"]
         for k, label in names:
@@ -1469,6 +1558,7 @@ def main():
           f"latency from {R['latency_file']}")
     tab_models(R)
     tab_effects_student(R)
+    tab_effects_student_more(R)
     tab_effects_pooled(R)
     tab_noise(R)
     tab_teacher(R)

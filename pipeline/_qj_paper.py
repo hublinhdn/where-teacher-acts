@@ -437,9 +437,9 @@ def ed(R):
 SENS_TIE = 0.01      # declared 2026-10-16: retention differences below this count as ties
 SENS_FLOOR = 0.1     # declared 2026-10-16: a floor below this is collapsed
 SENS_MARGIN = 0.02   # declared 2026-10-16: equivalence margin of D1 (ANC40)
-SENS_CONFIGS = (("minmax", "MinMax"), ("pct99.9", "Pct. 99.9"), ("entropy2048", "Entropy (2048)"),
-                ("pct99.99", "Pct. 99.99"), ("pct99.999", "Pct. 99.999"),
-                ("minmax_headfp", "MinMax, FP32 head"), ("pct99.9_headfp", "Pct. 99.9, FP32 head"))
+SENS_CONFIGS = (("minmax", "MinMax"), ("pct99.9", "P99.9"), ("entropy2048", "Entropy (2048)"),
+                ("pct99.99", "P99.99"), ("pct99.999", "P99.999"),
+                ("minmax_headfp", "MinMax, FP32 head"), ("pct99.9_headfp", "P99.9, FP32 head"))
 
 
 def sens(R):
